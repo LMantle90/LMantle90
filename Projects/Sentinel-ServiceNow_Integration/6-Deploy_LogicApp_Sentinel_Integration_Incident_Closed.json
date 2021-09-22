@@ -1,0 +1,192 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"sentinelsub": {
+			"type": "string",
+			"defaultValue": "XXXXXXXXXXXXXXXXXX"
+		},
+		"sentinelworkspace": {
+			"type": "string",
+			"defaultValue": "SentinelWorkspace"
+		},
+		"sentinelrg": {
+			"type": "string",
+			"defaultValue": "rg-uksouth-01"
+		},
+		"rgName": {
+			"type": "string",
+			"defaultValue": "rg-arm-template-test"
+		}
+	},
+	"variables": {},
+	"resources": [{
+		"type": "Microsoft.Resources/deployments",
+		"apiVersion": "2017-05-10",
+		"name": "resourceDeployment",
+		"resourceGroup": "[parameters('rgName')]",
+
+		"properties": {
+			"mode": "Incremental",
+			"template": {
+				"$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+				"contentVersion": "1.0.0.0",
+				"parameters": {},
+				"variables": {},
+				"resources": [{
+					"type": "Microsoft.Logic/workflows",
+					"apiVersion": "2017-07-01",
+					"name": "Sentinel_Integration_Incident_Closed",
+					"location": "[resourceGroup().location]",
+					"tags": {
+						"Project": "Sentinel Integration"
+					},
+					"properties": {
+						"state": "Enabled",
+						"definition": {
+							"$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+							"contentVersion": "1.0.0.0",
+							"parameters": {
+								"$connections": {
+									"defaultValue": {},
+									"type": "Object"
+								}
+							},
+							"triggers": {
+								"manual": {
+									"type": "Request",
+									"kind": "Http",
+									"inputs": {
+										"method": "POST",
+										"schema": {
+											"properties": {
+												"Annotation": {
+													"type": "string"
+												},
+												"EventSourceExternalId": {
+													"type": "string"
+												},
+												"Incident Number": {
+													"type": "string"
+												},
+												"URL": {
+													"type": "string"
+												}
+											},
+											"type": "object"
+										}
+									}
+								}
+							},
+							"actions": {
+								"Initialize_armID": {
+									"runAfter": {
+										"Initialize_variable": [
+											"Succeeded"
+										]
+									},
+									"type": "InitializeVariable",
+									"inputs": {
+										"variables": [{
+											"name": "armID",
+											"type": "string",
+											"value": "[concat('/subscriptions/',parameters('sentinelsub'),'/resourceGroups/',parameters('sentinelrg'),'/providers/Microsoft.OperationalInsights/workspaces/',parameters('sentinelworkspace'),'/providers/Microsoft.SecurityInsights/Incidents/')]"
+										}]
+									}
+								},
+								"Initialize_variable": {
+									"runAfter": {},
+									"type": "InitializeVariable",
+									"inputs": {
+										"variables": [{
+											"name": "str_body",
+											"type": "string",
+											"value": "@{triggerBody()}"
+										}]
+									}
+								},
+								"Parse_JSON": {
+									"runAfter": {
+										"Response": [
+											"Succeeded"
+										]
+									},
+									"type": "ParseJson",
+									"inputs": {
+										"content": "@variables('str_body')",
+										"schema": {
+											"properties": {
+												"Annotation": {
+													"type": "string"
+												},
+												"EventSourceExternalId": {
+													"type": "string"
+												},
+												"Incident Number": {
+													"type": "string"
+												}
+											},
+											"type": "object"
+										}
+									}
+								},
+								"Response": {
+									"runAfter": {
+										"Initialize_armID": [
+											"Succeeded"
+										]
+									},
+									"type": "Response",
+									"kind": "Http",
+									"inputs": {
+										"body": "Success",
+										"statusCode": 200
+									}
+								},
+								"Update_incident": {
+									"runAfter": {
+										"Parse_JSON": [
+											"Succeeded"
+										]
+									},
+									"type": "ApiConnection",
+									"inputs": {
+										"body": {
+											"classification": {
+												"ClassificationAndReason": "Undetermined",
+												"ClassificationReasonText": "@body('Parse_JSON')?['Annotation']"
+											},
+											"incidentArmId": "@{variables('armID')}@{body('Parse_JSON')?['EventSourceExternalId']}",
+											"status": "Closed"
+										},
+										"host": {
+											"connection": {
+												"name": "@parameters('$connections')['azuresentinel']['connectionId']"
+											}
+										},
+										"method": "put",
+										"path": "/Incidents"
+									}
+								}
+							},
+							"outputs": {}
+						},
+						"parameters": {
+							"$connections": {
+								"value": {
+									"azuresentinel": {
+										"connectionId": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Web/connections/azuresentinel')]",
+										"connectionName": "azuresentinel",
+										"id": "[concat('/subscriptions/',subscription().subscriptionId,'/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]"
+									}
+								}
+							}
+						}
+					}
+				}],
+				"outputs": {}
+			}
+		}
+
+	}]
+}

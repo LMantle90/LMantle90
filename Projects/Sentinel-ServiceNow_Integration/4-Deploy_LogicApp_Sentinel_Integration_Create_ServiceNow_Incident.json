@@ -1,0 +1,373 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"subscriptionname": {
+			"type": "string",
+			"defaultValue": "subscriptionname"
+		},
+		"vaultname": {
+			"type": "string",
+			"defaultValue": "kvarmdeployment"
+		},
+		"domainName": {
+			"type": "string",
+			"defaultValue": "domain"
+		},
+		"apiservicename": {
+			"type": "string",
+			"defaultValue": "apiservicename"
+		},
+		"rgName": {
+			"type": "string",
+			"defaultValue": "rg-arm-template-test"
+		},
+		"uri": {
+			"type": "string",
+			"defaultValue": "https://api...."
+		}
+	},
+	"variables": {},
+	"resources": [{
+		"type": "Microsoft.Resources/deployments",
+		"apiVersion": "2017-05-10",
+		"name": "resourceDeployment",
+		"resourceGroup": "[parameters('rgName')]",
+		"properties": {
+			"mode": "Incremental",
+			"template": {
+				"$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+				"contentVersion": "1.0.0.0",
+				"parameters": {},
+				"variables": {},
+				"resources": [{
+					"type": "Microsoft.Logic/workflows",
+					"apiVersion": "2017-07-01",
+					"name": "Sentinel_Integration_Create_ServiceNow_Incident",
+					"location": "[resourceGroup().location]",
+					"tags": {
+						"Project": "Sentinel Integration"
+					},
+					"properties": {
+						"state": "Enabled",
+						"definition": {
+							"$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+							"contentVersion": "1.0.0.0",
+							"parameters": {
+								"$connections": {
+									"defaultValue": {},
+									"type": "Object"
+								}
+							},
+							"triggers": {
+								"When_a_response_to_an_Azure_Sentinel_alert_is_triggered": {
+									"type": "ApiConnectionWebhook",
+									"inputs": {
+										"body": {
+											"callback_url": "@{listCallbackUrl()}"
+										},
+										"host": {
+											"connection": {
+												"name": "@parameters('$connections')['azuresentinel']['connectionId']"
+											}
+										},
+										"path": "/subscribe"
+									}
+								}
+							},
+							"actions": {
+								"Alert_-_Get_incident": {
+									"runAfter": {},
+									"type": "ApiConnection",
+									"inputs": {
+										"host": {
+											"connection": {
+												"name": "@parameters('$connections')['azuresentinel']['connectionId']"
+											}
+										},
+										"method": "get",
+										"path": "/Incidents/subscriptions/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/workspaces/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/alerts/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}"
+									}
+								},
+								"Get_secret_password": {
+									"runAfter": {
+										"Alert_-_Get_incident": [
+											"Succeeded"
+										]
+									},
+									"type": "ApiConnection",
+									"inputs": {
+										"host": {
+											"connection": {
+												"name": "@parameters('$connections')['keyvault']['connectionId']"
+											}
+										},
+										"method": "get",
+										"path": "/secrets/@{encodeURIComponent('password')}/value"
+									}
+								},
+								"Get_secret_username": {
+									"runAfter": {
+										"Get_secret_password": [
+											"Succeeded"
+										]
+									},
+									"type": "ApiConnection",
+									"inputs": {
+										"host": {
+											"connection": {
+												"name": "@parameters('$connections')['keyvault']['connectionId']"
+											}
+										},
+										"method": "get",
+										"path": "/secrets/@{encodeURIComponent('user')}/value"
+									}
+								},
+								"HTTP": {
+									"runAfter": {
+										"Switch_-_Assign_str_Severity": [
+											"Succeeded"
+										]
+									},
+									"type": "Http",
+									"inputs": {
+										"authentication": {
+											"password": "@body('Get_secret_password')?['value']",
+											"type": "Basic",
+											"username": "@body('Get_secret_username')?['value']"
+										},
+										"body": {
+											"EventList": [{
+												"category": "Security-Sentinel",
+												"custompairs": [{
+														"name": "external_url",
+														"value": "@{body('Alert_-_Get_incident')?['properties']?['incidentUrl']}"
+													},
+													{
+														"name": "u_source_technology",
+														"value": "Azure Sentinel"
+													}
+												],
+												"application": "siem",
+												"domainName": "[parameters('domainName')]",
+												"eventsourcebacksyncserver": "[concat(parameters('apiservicename'),'.azure-api.net')]",
+												"eventsourceexternalid": "@{body('Alert_-_Get_incident')?['name']}",
+												"eventsourcesendingserver": "@{triggerBody()?['WorkspaceSubscriptionId']}.dxc.com",
+												"incidentImpact": "@{variables('str_incidentImpact')}",
+												"longDescription": "This is a test incident from Azure Sentinel. @{body('Alert_-_Get_incident')?['properties']?['description']}",
+												"node": "@{triggerBody()?['WorkspaceId']}",
+												"object": "[concat('Azure Sentinel - ',parameters('subscriptionname'))]",
+												"severity": "@{variables('str_Severity')}",
+												"title": "Testing-@{body('Alert_-_Get_incident')?['properties']?['incidentNumber']}-@{body('Alert_-_Get_incident')?['properties']?['title']}"
+											}]
+										},
+										"headers": {
+											"Content-Type": "application/json"
+										},
+										"method": "POST",
+										"uri": "[parameters('uri')]"
+									}
+								},
+								"HTTP_POST_Response_Status_Code": {
+									"runAfter": {
+										"HTTP": [
+											"Succeeded"
+										]
+									},
+									"type": "InitializeVariable",
+									"inputs": {
+										"variables": [{
+											"name": "strStatusCode",
+											"type": "string",
+											"value": "@{outputs('HTTP')['statusCode']}"
+										}]
+									}
+								},
+								"Initialize_variable_str_Severity": {
+									"runAfter": {
+										"Get_secret_username": [
+											"Succeeded"
+										]
+									},
+									"type": "InitializeVariable",
+									"inputs": {
+										"variables": [{
+											"name": "str_Severity",
+											"type": "string"
+										}]
+									}
+								},
+								"Initialize_variable_str_incidentImpact": {
+									"runAfter": {
+										"Initialize_variable_str_Severity": [
+											"Succeeded"
+										]
+									},
+									"type": "InitializeVariable",
+									"inputs": {
+										"variables": [{
+											"name": "str_incidentImpact",
+											"type": "string"
+										}]
+									}
+								},
+								"Set_variable": {
+									"runAfter": {
+										"Initialize_variable_str_incidentImpact": [
+											"Succeeded"
+										]
+									},
+									"type": "SetVariable",
+									"inputs": {
+										"name": "str_incidentImpact",
+										"value": "@body('Get_secret_username')?['value']"
+									}
+								},
+								"Set_variable_2": {
+									"runAfter": {
+										"Set_variable": [
+											"Succeeded"
+										]
+									},
+									"type": "SetVariable",
+									"inputs": {
+										"name": "str_incidentImpact",
+										"value": "@body('Get_secret_password')?['value']"
+									}
+								},
+								"Switch_-_Assign_str_Severity": {
+									"runAfter": {
+										"Set_variable_2": [
+											"Succeeded"
+										]
+									},
+									"cases": {
+										"High": {
+											"case": "High",
+											"actions": {
+												"set_Critical_Severity": {
+													"runAfter": {},
+													"type": "SetVariable",
+													"inputs": {
+														"name": "str_Severity",
+														"value": "Critical"
+													}
+												},
+												"set_Critical_incidentImpact": {
+													"runAfter": {
+														"set_Critical_Severity": [
+															"Succeeded"
+														]
+													},
+													"type": "SetVariable",
+													"inputs": {
+														"name": "str_incidentImpact",
+														"value": "1"
+													}
+												}
+											}
+										},
+										"Low": {
+											"case": "Low",
+											"actions": {
+												"Assign_Minor_Severity": {
+													"runAfter": {},
+													"type": "SetVariable",
+													"inputs": {
+														"name": "str_Severity",
+														"value": "Minor"
+													}
+												},
+												"Set_incidentImpact_Minor": {
+													"runAfter": {
+														"Assign_Minor_Severity": [
+															"Succeeded"
+														]
+													},
+													"type": "SetVariable",
+													"inputs": {
+														"name": "str_incidentImpact",
+														"value": "3"
+													}
+												}
+											}
+										},
+										"Medium": {
+											"case": "Medium",
+											"actions": {
+												"Assign_Major_Severity": {
+													"runAfter": {},
+													"type": "SetVariable",
+													"inputs": {
+														"name": "str_Severity",
+														"value": "Major"
+													}
+												},
+												"Set_incidentImpact_Major": {
+													"runAfter": {
+														"Assign_Major_Severity": [
+															"Succeeded"
+														]
+													},
+													"type": "SetVariable",
+													"inputs": {
+														"name": "str_incidentImpact",
+														"value": "2"
+													}
+												}
+											}
+										}
+									},
+									"default": {
+										"actions": {
+											"Assign_Warning_Severity": {
+												"runAfter": {},
+												"type": "SetVariable",
+												"inputs": {
+													"name": "str_Severity",
+													"value": "Warning"
+												}
+											},
+											"Set_warning_incidentImpact": {
+												"runAfter": {
+													"Assign_Warning_Severity": [
+														"Succeeded"
+													]
+												},
+												"type": "SetVariable",
+												"inputs": {
+													"name": "str_incidentImpact",
+													"value": "4"
+												}
+											}
+										}
+									},
+									"expression": "@body('Alert_-_Get_incident')?['properties']?['severity']",
+									"type": "Switch"
+								}
+							},
+							"outputs": {}
+						},
+						"parameters": {
+							"$connections": {
+								"value": {
+									"azuresentinel": {
+										"connectionId": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Web/connections/azuresentinel')]",
+										"connectionName": "azuresentinel",
+										"id": "[concat('/subscriptions/',subscription().subscriptionId,'/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]"
+									},
+									"keyvault": {
+										"connectionId": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Web/connections/keyvault')]",
+										"connectionName": "keyvault",
+										"id": "[concat('/subscriptions/',subscription().subscriptionId,'/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/keyvault')]"
+									}
+								}
+							}
+						}
+					}
+				}],
+				"outputs": {}
+			}
+		}
+	}]
+}

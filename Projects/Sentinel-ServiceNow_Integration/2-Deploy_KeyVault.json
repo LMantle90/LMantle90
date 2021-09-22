@@ -1,0 +1,194 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"tenantid": {
+			"type": "string",
+			"defaultValue": ""
+		},
+		"vaultname": {
+			"type": "string",
+			"defaultValue": ""
+		},
+		"objectid": {
+			"type": "string",
+			"defaultValue": ""
+		},
+		"devapipassword": {
+			"type": "string",
+			"defaultValue": ""
+		},
+		"devapiuser": {
+			"type": "string",
+			"defaultValue": ""
+		},
+		"user": {
+			"type": "string",
+			"defaultValue": ""
+		},
+		"rgName": {
+			"type": "string",
+			"defaultValue": ""
+		},
+		"password": {
+			"type": "string",
+			"defaultValue": ""
+		}
+	},
+	"variables": {},
+	"resources": [{
+		"type": "Microsoft.Resources/deployments",
+		"apiVersion": "2017-05-10",
+		"name": "resourceDeployment",
+		"resourceGroup": "[parameters('rgName')]",
+
+		"properties": {
+			"mode": "Incremental",
+			"template": {
+				"$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+				"contentVersion": "1.0.0.0",
+				"parameters": {},
+				"variables": {},
+				"resources": [{
+					"type": "Microsoft.KeyVault/vaults",
+					"apiVersion": "2016-10-01",
+					"name": "[parameters('vaultname')]",
+					"location": "[resourceGroup().location]",
+					"properties": {
+						"sku": {
+							"family": "A",
+							"name": "standard"
+						},
+						"tenantId": "[parameters('tenantid')]",
+						"accessPolicies": [{
+							"tenantId": "[parameters('tenantid')]",
+							"objectId": "[parameters('objectid')]",
+							"permissions": {
+								"keys": [
+									"get",
+									"create",
+									"delete",
+									"list",
+									"update",
+									"import",
+									"backup",
+									"restore",
+									"recover"
+								],
+								"secrets": [
+									"restore",
+									"purge",
+									"recover",
+									"set",
+									"backup",
+									"get",
+									"delete",
+									"list"
+								],
+								"certificates": [
+									"get",
+									"delete",
+									"list",
+									"create",
+									"import",
+									"update",
+									"deleteissuers",
+									"getissuers",
+									"listissuers",
+									"managecontacts",
+									"manageissuers",
+									"setissuers",
+									"recover",
+									"backup",
+									"restore"
+								],
+								"storage": [
+									"delete",
+									"deletesas",
+									"get",
+									"getsas",
+									"list",
+									"listsas",
+									"regeneratekey",
+									"set",
+									"setsas",
+									"update",
+									"recover",
+									"backup",
+									"restore"
+								]
+							}
+						}],
+						"enabledForDeployment": true,
+						"enabledForDiskEncryption": false,
+						"enabledForTemplateDeployment": true,
+						"enableSoftDelete": false
+					},
+					"resources": [{
+							"type": "Microsoft.KeyVault/vaults/secrets",
+							"apiVersion": "2016-10-01",
+							"name": "[concat(parameters('vaultname'), '/devapipassword')]",
+							"location": "[resourceGroup().location]",
+							"dependsOn": [
+								"[parameters('vaultname')]"
+							],
+							"properties": {
+								"value": "[parameters('devapipassword')]",
+								"attributes": {
+									"enabled": true
+								}
+							}
+						},
+						{
+							"type": "Microsoft.KeyVault/vaults/secrets",
+							"apiVersion": "2016-10-01",
+							"name": "[concat(parameters('vaultname'), '/devapiuser')]",
+							"location": "[resourceGroup().location]",
+							"dependsOn": [
+								"[parameters('vaultname')]"
+							],
+							"properties": {
+								"value": "[parameters('devapiuser')]",
+								"attributes": {
+									"enabled": true
+								}
+							}
+						},
+						{
+							"type": "Microsoft.KeyVault/vaults/secrets",
+							"apiVersion": "2016-10-01",
+							"name": "[concat(parameters('vaultname'), '/password')]",
+							"location": "[resourceGroup().location]",
+							"dependsOn": [
+								"[parameters('vaultname')]"
+							],
+							"properties": {
+								"value": "[parameters('password')]",
+								"attributes": {
+									"enabled": true
+								}
+							}
+						},
+						{
+							"type": "Microsoft.KeyVault/vaults/secrets",
+							"apiVersion": "2016-10-01",
+							"name": "[concat(parameters('vaultname'), '/user')]",
+							"location": "[resourceGroup().location]",
+							"dependsOn": [
+								"[parameters('vaultname')]"
+							],
+							"properties": {
+								"value": "[parameters('user')]",
+								"attributes": {
+									"enabled": true
+								}
+							}
+						}
+
+					]
+				}],
+				"outputs": {}
+			}
+		}
+	}]
+}
