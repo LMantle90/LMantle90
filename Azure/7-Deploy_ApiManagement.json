@@ -1,0 +1,265 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"apiservicename": {
+			"type": "string",
+			"defaultValue": ""
+		},
+		"adminemail": {
+			"type": "string",
+			"defaultValue": ""
+		},
+		"companyname": {
+			"type": "string",
+			"defaultValue": ""
+		},
+		"rgName": {
+			"type": "string",
+			"defaultValue": ""
+		},
+		"user": {
+			"type": "string",
+			"defaultValue": ""
+		},
+		"password": {
+			"type": "string",
+			"defaultValue": ""
+		}
+	},
+	"variables": {},
+	"resources": [{
+		"type": "Microsoft.Resources/deployments",
+		"apiVersion": "2017-05-10",
+		"name": "resourceDeployment",
+		"resourceGroup": "[parameters('rgName')]",
+
+		"properties": {
+			"mode": "Incremental",
+			"template": {
+				"$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+				"contentVersion": "1.0.0.0",
+				"parameters": {},
+				"variables": {},
+				"resources": [{
+					"type": "Microsoft.ApiManagement/service",
+					"apiVersion": "2020-06-01-preview",
+					"name": "[parameters('apiservicename')]",
+					"location": "UK South",
+					"sku": {
+						"name": "Consumption",
+						"capacity": 0
+					},
+					"identity": {
+						"type": "SystemAssigned"
+					},
+					"properties": {
+						"publisherEmail": "[parameters('adminemail')]",
+						"publisherName": "[parameters('companyname')]",
+						"notificationSenderEmail": "apimgmt-noreply@mail.windowsazure.com",
+						"hostnameConfigurations": [{
+							"type": "Proxy",
+							"hostName": "[concat(parameters('apiservicename'), '.azure-api.net')]",
+							"negotiateClientCertificate": false,
+							"defaultSslBinding": true
+						}],
+						"customProperties": {
+							"Microsoft.WindowsAzure.ApiManagement.Gateway.Security.Protocols.Tls10": "false",
+							"Microsoft.WindowsAzure.ApiManagement.Gateway.Security.Protocols.Tls11": "true",
+							"Microsoft.WindowsAzure.ApiManagement.Gateway.Protocols.Server.Http2": "true",
+							"Microsoft.WindowsAzure.ApiManagement.Gateway.Security.Backend.Protocols.Tls10": "true",
+							"Microsoft.WindowsAzure.ApiManagement.Gateway.Security.Backend.Protocols.Tls11": "true",
+							"Microsoft.WindowsAzure.ApiManagement.Gateway.Security.Backend.Protocols.Ssl30": "true"
+						},
+						"virtualNetworkType": "None",
+						"enableClientCertificate": false,
+						"disableGateway": false,
+						"apiVersionConstraint": {}
+					},
+					"resources": [{
+							"type": "Microsoft.ApiManagement/service/apis",
+							"apiVersion": "2020-06-01-preview",
+							"name": "[concat(parameters('apiservicename'), '/incident')]",
+							"dependsOn": [
+								"[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',parameters('rgName'),'/providers/Microsoft.ApiManagement/service/', parameters('apiservicename'))]"
+							],
+							"properties": {
+								"displayName": "incident",
+								"apiRevision": "1",
+								"subscriptionRequired": true,
+								"serviceUrl": "[concat('https://', parameters('apiservicename'),'.azure-api.net')]",
+								"path": "incident",
+								"protocols": [
+									"https"
+								],
+								"isCurrent": true
+							},
+							"resources": [{
+									"type": "Microsoft.ApiManagement/service/apis/operations",
+									"apiVersion": "2020-06-01-preview",
+									"name": "[concat(parameters('apiservicename'), '/incident/closed')]",
+									"dependsOn": [
+										"[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',parameters('rgName'),'/providers/Microsoft.ApiManagement/service/', parameters('apiservicename'), '/apis/incident')]",
+										"[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',parameters('rgName'),'/providers/Microsoft.ApiManagement/service/', parameters('apiservicename'))]"
+									],
+									"properties": {
+										"displayName": "closed",
+										"method": "POST",
+										"urlTemplate": "/closed",
+										"templateParameters": [],
+										"description": "This will be triggered when OMI application backsync sends an API request to state a servicenow security incident has been CLOSED.",
+										"responses": []
+									},
+									"resources": [{
+										"type": "Microsoft.ApiManagement/service/apis/operations/policies",
+										"apiVersion": "2020-06-01-preview",
+										"name": "[concat(parameters('apiservicename'), '/incident/closed/policy')]",
+										"dependsOn": [
+											"[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',parameters('rgName'),'/providers/Microsoft.ApiManagement/service/', parameters('apiservicename'), '/apis/incident/operations/closed')]",
+											"[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',parameters('rgName'),'/providers/Microsoft.ApiManagement/service/', parameters('apiservicename'), '/apis/incident')]",
+											"[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',parameters('rgName'),'/providers/Microsoft.ApiManagement/service/', parameters('apiservicename'))]"
+											
+										],
+										"properties": {
+											"value": "<!--\r\n    IMPORTANT:\r\n    - Policy elements can appear only within the <inbound>, <outbound>, <backend> section elements.\r\n    - To apply a policy to the incoming request (before it is forwarded to the backend service), place a corresponding policy element within the <inbound> section element.\r\n    - To apply a policy to the outgoing response (before it is sent back to the caller), place a corresponding policy element within the <outbound> section element.\r\n    - To add a policy, place the cursor at the desired insertion point and select a policy from the sidebar.\r\n    - To remove a policy, delete the corresponding policy statement from the policy document.\r\n    - Position the <base> element within a section element to inherit all policies from the corresponding section element in the enclosing scope.\r\n    - Remove the <base> element to prevent inheriting policies from the corresponding section element in the enclosing scope.\r\n    - Policies are applied in the order of their appearance, from the top down.\r\n    - Comments within policy elements are not supported and may disappear. Place your comments between policy elements or at a higher level scope.\r\n-->\r\n<policies>\r\n  <inbound>\r\n    <base />\r\n    <set-backend-service id=\"apim-generated-policy\" backend-id=\"Logic_App_Closed\" />\r\n    <set-method id=\"apim-generated-policy\">POST</set-method>\r\n    <rewrite-uri id=\"apim-generated-policy\" template=\"/manual/paths/invoke/?api-version=2016-06-01&amp;sp=/triggers/manual/run&amp;sv=1.0&amp;sig={{Logic_App_Closed}}\" />\r\n    <set-header id=\"apim-generated-policy\" name=\"Ocp-Apim-Subscription-Key\" exists-action=\"delete\" />\r\n    <choose>\r\n      <when condition=\"@(context.Request.Headers.GetValueOrDefault(&quot;Authorization&quot;)==null || context.Request.Headers.GetValueOrDefault(&quot;Authorization&quot;).Length&lt;1 || context.Request.Headers.GetValueOrDefault(&quot;Authorization&quot;).AsBasic().UserId!=&quot;{{user}}&quot; || context.Request.Headers.GetValueOrDefault(&quot;Authorization&quot;).AsBasic().Password!=&quot;{{password}}&quot;)\">\r\n        <return-response>\r\n          <set-status code=\"401\" reason=\"Not authorized\" />\r\n        </return-response>\r\n      </when>\r\n    </choose>\r\n    <set-header name=\"Authorization\" exists-action=\"delete\" />\r\n  </inbound>\r\n  <backend>\r\n    <base />\r\n  </backend>\r\n  <outbound>\r\n    <base />\r\n  </outbound>\r\n  <on-error>\r\n    <base />\r\n  </on-error>\r\n</policies>",
+											"format": "xml"
+										}
+									}]
+								},
+								{
+									"type": "Microsoft.ApiManagement/service/apis/operations",
+									"apiVersion": "2020-06-01-preview",
+									"name": "[concat(parameters('apiservicename'), '/incident/created')]",
+									"dependsOn": [
+										"[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',parameters('rgName'),'/providers/Microsoft.ApiManagement/service/', parameters('apiservicename'), '/apis/incident')]",
+										"[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',parameters('rgName'),'/providers/Microsoft.ApiManagement/service/', parameters('apiservicename'))]"
+									],
+									"properties": {
+										"displayName": "created",
+										"method": "POST",
+										"urlTemplate": "/created",
+										"templateParameters": [],
+										"description": "This will be triggered when OMI application backsync sends an API request to state a servicenow security incident has been CREATED.",
+										"responses": []
+									},
+									"resources": [{
+										"type": "Microsoft.ApiManagement/service/apis/operations/policies",
+										"apiVersion": "2020-06-01-preview",
+										"name": "[concat(parameters('apiservicename'), '/incident/created/policy')]",
+										"dependsOn": [
+											"[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',parameters('rgName'),'/providers/Microsoft.ApiManagement/service/', parameters('apiservicename'), '/apis/incident/operations/created')]",
+											"[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',parameters('rgName'),'/providers/Microsoft.ApiManagement/service/', parameters('apiservicename'), '/apis/incident')]",
+											"[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',parameters('rgName'),'/providers/Microsoft.ApiManagement/service/', parameters('apiservicename'))]"
+										],
+										"properties": {
+											"value": "<!--\r\n    IMPORTANT:\r\n    - Policy elements can appear only within the <inbound>, <outbound>, <backend> section elements.\r\n    - To apply a policy to the incoming request (before it is forwarded to the backend service), place a corresponding policy element within the <inbound> section element.\r\n    - To apply a policy to the outgoing response (before it is sent back to the caller), place a corresponding policy element within the <outbound> section element.\r\n    - To add a policy, place the cursor at the desired insertion point and select a policy from the sidebar.\r\n    - To remove a policy, delete the corresponding policy statement from the policy document.\r\n    - Position the <base> element within a section element to inherit all policies from the corresponding section element in the enclosing scope.\r\n    - Remove the <base> element to prevent inheriting policies from the corresponding section element in the enclosing scope.\r\n    - Policies are applied in the order of their appearance, from the top down.\r\n    - Comments within policy elements are not supported and may disappear. Place your comments between policy elements or at a higher level scope.\r\n-->\r\n<policies>\r\n  <inbound>\r\n    <base />\r\n    <set-backend-service id=\"apim-generated-policy\" backend-id=\"Logic_App_Created\" />\r\n    <set-method id=\"apim-generated-policy\">POST</set-method>\r\n    <rewrite-uri id=\"apim-generated-policy\" template=\"/manual/paths/invoke/?api-version=2016-06-01&amp;sp=/triggers/manual/run&amp;sv=1.0&amp;sig={{Logic_App_Created}}\" />\r\n    <set-header id=\"apim-generated-policy\" name=\"Ocp-Apim-Subscription-Key\" exists-action=\"delete\" />\r\n    <choose>\r\n      <when condition=\"@(context.Request.Headers.GetValueOrDefault(&quot;Authorization&quot;)==null || context.Request.Headers.GetValueOrDefault(&quot;Authorization&quot;).Length&lt;1 || context.Request.Headers.GetValueOrDefault(&quot;Authorization&quot;).AsBasic().UserId!=&quot;{{user}}&quot; || context.Request.Headers.GetValueOrDefault(&quot;Authorization&quot;).AsBasic().Password!=&quot;{{password}}&quot;)\">\r\n        <return-response>\r\n          <set-status code=\"401\" reason=\"Not authorized\" />\r\n        </return-response>\r\n      </when>\r\n    </choose>\r\n    <set-header name=\"Authorization\" exists-action=\"delete\" />\r\n  </inbound>\r\n  <backend>\r\n    <base />\r\n  </backend>\r\n  <outbound>\r\n    <base />\r\n  </outbound>\r\n  <on-error>\r\n    <base />\r\n  </on-error>\r\n</policies>",
+											"format": "xml"
+										}
+									}]
+								}
+							]
+						},
+						{
+							"type": "Microsoft.ApiManagement/service/backends",
+							"apiVersion": "2020-06-01-preview",
+							"name": "[concat(parameters('apiservicename'), '/Logic_App_Closed')]",
+							"dependsOn": [
+								"[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',parameters('rgName'),'/providers/Microsoft.ApiManagement/service/', parameters('apiservicename'))]"
+							],
+							"properties": {
+								"title": "Logic_App_Closed",
+								"description": "Logic_App_Closed",
+								"url": "https://prod-06.uksouth.logic.azure.com:443/workflows/25b15f7d9b284b5f98d5553c1361b38c/triggers",
+								"protocol": "http",
+								"resourceId": "[concat('https://management.azure.com/subscriptions/',subscription().subscriptionId,'/resourceGroups/',parameters('rgName'),'/providers/Microsoft.Logic/workflows/Sentinel_Integration_Incident_Closed')]"
+							}
+						},
+						{
+							"type": "Microsoft.ApiManagement/service/backends",
+							"apiVersion": "2020-06-01-preview",
+							"name": "[concat(parameters('apiservicename'), '/Logic_App_Created')]",
+							"dependsOn": [
+								"[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',parameters('rgName'),'/providers/Microsoft.ApiManagement/service/', parameters('apiservicename'))]"
+							],
+							"properties": {
+								"title": "Logic_App_Created",
+								"description": "Logic_App_Created",
+								"url": "https://prod-13.uksouth.logic.azure.com:443/workflows/7886b92f077e41f6a12b2b0758edcf44/triggers",
+								"protocol": "http",
+								"resourceId": "[concat('https://management.azure.com/subscriptions/',subscription().subscriptionId,'/resourceGroups/',parameters('rgName'),'/providers/Microsoft.Logic/workflows/Sentinel_Integration_Incident_Created')]"
+							}
+						},
+						{
+							"type": "Microsoft.ApiManagement/service/policies",
+							"apiVersion": "2020-06-01-preview",
+							"name": "[concat(parameters('apiservicename'), '/policy')]",
+							"dependsOn": [
+								"[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',parameters('rgName'),'/providers/Microsoft.ApiManagement/service/', parameters('apiservicename'))]"
+							],
+							"properties": {
+								"value": "<!--\r\n    IMPORTANT:\r\n    - Policy elements can appear only within the <inbound>, <outbound>, <backend> section elements.\r\n    - Only the <forward-request> policy element can appear within the <backend> section element.\r\n    - To apply a policy to the incoming request (before it is forwarded to the backend service), place a corresponding policy element within the <inbound> section element.\r\n    - To apply a policy to the outgoing response (before it is sent back to the caller), place a corresponding policy element within the <outbound> section element.\r\n    - To add a policy position the cursor at the desired insertion point and click on the round button associated with the policy.\r\n    - To remove a policy, delete the corresponding policy statement from the policy document.\r\n    - Policies are applied in the order of their appearance, from the top down.\r\n-->\r\n<policies>\r\n  <inbound></inbound>\r\n  <backend>\r\n    <forward-request />\r\n  </backend>\r\n  <outbound></outbound>\r\n</policies>",
+								"format": "xml"
+							}
+						},
+
+						{
+							"type": "Microsoft.ApiManagement/service/namedValues",
+							"apiVersion": "2020-06-01-preview",
+							"name": "[concat(parameters('apiservicename'), '/Logic_App_Closed')]",
+							"dependsOn": [
+								"[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',parameters('rgName'),'/providers/Microsoft.ApiManagement/service/', parameters('apiservicename'))]"
+							],
+							"properties": {
+								"displayName": "Logic_App_Closed",
+								"secret": true,
+								"value": "logicapp2"
+							}
+						},
+						{
+							"type": "Microsoft.ApiManagement/service/namedValues",
+							"apiVersion": "2020-06-01-preview",
+							"name": "[concat(parameters('apiservicename'), '/Logic_App_Created')]",
+							"dependsOn": [
+								"[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',parameters('rgName'),'/providers/Microsoft.ApiManagement/service/', parameters('apiservicename'))]"
+							],
+							"properties": {
+								"displayName": "Logic_App_Created",
+								"secret": true,
+								"value": "logicapp1"
+							}
+						},
+						{
+							"type": "Microsoft.ApiManagement/service/namedValues",
+							"apiVersion": "2020-06-01-preview",
+							"name": "[concat(parameters('apiservicename'), '/password')]",
+							"dependsOn": [
+								"[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',parameters('rgName'),'/providers/Microsoft.ApiManagement/service/', parameters('apiservicename'))]"
+							],
+							"properties": {
+								"displayName": "password",
+								"value": "[parameters('password')]",
+								"secret": true
+							}
+						},
+						{
+							"type": "Microsoft.ApiManagement/service/namedValues",
+							"apiVersion": "2020-06-01-preview",
+							"name": "[concat(parameters('apiservicename'), '/user')]",
+							"dependsOn": [
+								"[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',parameters('rgName'),'/providers/Microsoft.ApiManagement/service/', parameters('apiservicename'))]"
+							],
+							"properties": {
+								"displayName": "user",
+								"value": "[parameters('user')]",
+								"secret": false
+							}
+						}
+
+					]
+
+				}],
+				"outputs": {}
+			}
+		}
+	}]
+}

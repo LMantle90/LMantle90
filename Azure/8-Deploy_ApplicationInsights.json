@@ -1,0 +1,45 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"appinsightsname": {
+			"type": "string",
+			"defaultValue": "appinsightarm"
+		},
+		"rgName": {
+			"type": "string",
+			"defaultValue": "rg-arm-template-test"
+		}
+	},
+	"variables": {},
+	"resources": [{
+		"type": "Microsoft.Resources/deployments",
+		"apiVersion": "2017-05-10",
+		"name": "resourceDeployment",
+		"resourceGroup": "[parameters('rgName')]",
+		"properties": {
+			"mode": "Incremental",
+			"template": {
+				"$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+				"contentVersion": "1.0.0.0",
+				"parameters": {},
+				"variables": {},
+				"resources": [{
+					"type": "microsoft.insights/components",
+					"apiVersion": "2018-05-01-preview",
+					"name": "[parameters('appinsightsname')]",
+					"location": "[resourceGroup().location]",
+					"kind": "web",
+					"properties": {
+						"Application_Type": "web",
+						"Request_Source": "AzurePowerShell",
+						"RetentionInDays": 90,
+						"publicNetworkAccessForIngestion": "Enabled",
+						"publicNetworkAccessForQuery": "Enabled"
+					}
+				}],
+				"outputs": {}
+			}
+		}
+	}]
+}
