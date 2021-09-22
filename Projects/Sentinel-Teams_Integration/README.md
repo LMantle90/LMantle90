@@ -4,3 +4,5 @@ Azure Logic Apps were developed, which were triggered by the generation of Secur
 The Logic App would gather the details of the Sentinel Alert that triggered it, and determine the type of Incident, and the Severity of that Incident.
 Depending on the Type and Severity, the Logic App would then generate a message that would be sent to a Microsoft Teams channel, which was being monitored by a particular security team.
 This message would provide details of the Sentinel Alert, as well as a link to the Alert within the Azure Portal.
+
+Azure Resource Management (ARM) Templates were used to deploy these Logic Apps and Sentinel resources into new Azure Subscriptions, and PowerShell scripts were used to quickly create new Microsoft Teams 'Teams' and 'Channels', and add the requested users to them.
